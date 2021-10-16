@@ -39,3 +39,4 @@ wasm-bindgen-test = "0.3.28"
 
 [dependencies]
 tap = "1.0.1"
+triomphe = "0.1.3"

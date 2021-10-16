@@ -6,8 +6,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::semicolon_if_nothing_returned)]
 
-use std::{borrow::Borrow, marker::PhantomPinned, pin::Pin, sync::Arc};
+use std::{borrow::Borrow, marker::PhantomPinned, pin::Pin};
 use tap::Pipe;
+use triomphe::{Arc, ArcBorrow};
 
 #[cfg(doctest)]
 pub mod readme {
@@ -30,7 +31,8 @@ impl<T> Node<T> {
 			value,
 			_pin: PhantomPinned,
 		}
-		.pipe(Arc::pin)
+		.pipe(Arc::new)
+		.pipe(|arc| unsafe { Pin::new_unchecked(arc) })
 	}
 
 	/// Retrieves a reference to a [`Node`] with a value matching `key` iff available.
@@ -51,4 +53,18 @@ impl<T> Node<T> {
 
 	// The standard library doesn't provide mutability helpers on `Arc` that work (safely) with a pinned value.
 	// Mutability will be back, eventually.
+}
+
+#[must_use]
+pub fn borrow_arc<T>(this: &Pin<Arc<Node<T>>>) -> Pin<ArcBorrow<'_, Node<T>>> {
+	unsafe { &*(this as *const Pin<Arc<Node<T>>>).cast::<Arc<Node<T>>>() }
+		.pipe(Arc::borrow_arc)
+		.pipe(|arc_borrow| unsafe { Pin::new_unchecked(arc_borrow) })
+}
+
+#[must_use]
+pub fn clone_arc<T>(this: &Pin<ArcBorrow<Node<T>>>) -> Pin<Arc<Node<T>>> {
+	unsafe { &*(this as *const Pin<ArcBorrow<Node<T>>>).cast::<ArcBorrow<Node<T>>>() }
+		.pipe(ArcBorrow::clone_arc)
+		.pipe(|arc| unsafe { Pin::new_unchecked(arc) })
 }
