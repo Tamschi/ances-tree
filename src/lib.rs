@@ -27,11 +27,11 @@ impl<T> Node<T> {
 		Self { parent, value }
 	}
 
-	/// Retrieves a reference to a value matching `key` iff available.
+	/// Retrieves a reference to a [`Node`] with a value matching `key` iff available.
 	///
 	/// See also: <https://doc.rust-lang.org/stable/std/collections/hash_set/struct.HashSet.html#method.get>
 	#[must_use]
-	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&T>
+	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&Self>
 	where
 		T: Borrow<Q>,
 		Q: Eq,
@@ -40,17 +40,15 @@ impl<T> Node<T> {
 		while this.value.borrow() != key {
 			this = this.parent.as_ref()?
 		}
-		Some(&this.value)
+		Some(this)
 	}
 
-	/// Retrieves a mutable reference to a value matching `key` iff available.
-	///
-	/// See also: <https://doc.rust-lang.org/stable/std/collections/hash_set/struct.HashSet.html#method.get>
+	/// Retrieves a mutable reference to a [`Node`] with a value matching `key` iff available.
 	///
 	/// # Errors
 	///
 	/// Iff an ancestor is shared so that it can't be borrowed mutably.
-	pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Result<Option<&mut T>, &mut Arc<Self>>
+	pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Result<Option<&mut Self>, &mut Arc<Self>>
 	where
 		T: Borrow<Q>,
 		Q: Eq,
@@ -70,19 +68,19 @@ impl<T> Node<T> {
 				}
 			}
 		}
-		Ok(Some(&mut this.value))
+		Ok(Some(this))
 	}
 
-	/// Retrieves a mutable to a value matching `key` iff available, by cloning ancestors as necessary.
+	/// Retrieves a mutable reference to a [`Node`] with a value matching `key` iff available, by cloning ancestors as necessary.
 	///
-	/// See also: <https://doc.rust-lang.org/stable/std/collections/hash_set/struct.HashSet.html#method.get>
+	/// No [`Node`]s are cloned if no matching value is found.
 	///
 	/// # Errors
 	///
 	/// Iff an ancestor is shared so that it can't be borrowed mutably.
 	#[allow(clippy::result_unit_err)] // In a real crate, I'd return a `Result<Option<&mut T>, &mut Arc<Self>>` instead.
 	#[allow(clippy::shadow_unrelated)]
-	pub fn make_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut T>
+	pub fn make_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut Self>
 	where
 		T: Borrow<Q> + Clone,
 		Q: Eq,
@@ -122,6 +120,6 @@ impl<T> Node<T> {
 			}
 		}
 
-		Some(&mut this.value)
+		Some(this)
 	}
 }
