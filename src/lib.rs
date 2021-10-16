@@ -50,9 +50,7 @@ impl<T> Node<T> {
 	/// # Errors
 	///
 	/// Iff an ancestor is shared so that it can't be borrowed mutably.
-	#[allow(clippy::result_unit_err)] // In a real crate, I'd return a `Result<Option<&mut T>, &mut Arc<Self>>` instead.
-	#[must_use]
-	pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Result<Option<&mut T>, ()>
+	pub fn get_mut<Q: ?Sized>(&mut self, key: &Q) -> Result<Option<&mut T>, &mut Arc<Self>>
 	where
 		T: Borrow<Q>,
 		Q: Eq,
@@ -61,7 +59,15 @@ impl<T> Node<T> {
 		while this.value.borrow() != key {
 			match this.parent.as_mut() {
 				None => return Ok(None),
-				Some(parent) => this = Arc::get_mut(parent).ok_or(())?,
+				Some(parent) => {
+					if let Some(parent) = Arc::get_mut(parent) {
+						// The lifetime must be detached here…:
+						this = unsafe { &mut *(parent as *mut _) }
+					} else {
+						// … so that this compiles. Please correct me if there's a better way.
+						return Err(parent);
+					}
+				}
 			}
 		}
 		Ok(Some(&mut this.value))
@@ -75,23 +81,47 @@ impl<T> Node<T> {
 	///
 	/// Iff an ancestor is shared so that it can't be borrowed mutably.
 	#[allow(clippy::result_unit_err)] // In a real crate, I'd return a `Result<Option<&mut T>, &mut Arc<Self>>` instead.
+	#[allow(clippy::shadow_unrelated)]
 	pub fn make_mut<Q: ?Sized>(&mut self, key: &Q) -> Option<&mut T>
 	where
 		T: Borrow<Q> + Clone,
 		Q: Eq,
 	{
-		// Slow, but simple for demo purposes:
-		self.get(key)?;
-		// We now know that the target value exists somewhere.
-
 		let mut this = self;
+
+		let mut shared = false;
 		while this.value.borrow() != key {
-			this = this
-				.parent
-				.as_mut()
-				.expect("Misbehaving equality." /* We know the node exists. */)
-				.pipe(Arc::make_mut)
+			if let Some(parent) = this.parent.as_mut()?.pipe(Arc::get_mut) {
+				// The lifetime must be detached here…:
+				this = unsafe { &mut *(parent as *mut _) }
+			} else {
+				shared = true;
+				break;
+			}
 		}
+
+		if shared {
+			// Don't run (potentially expensive) comparisons twice.
+
+			let mut generations = 0;
+
+			// … so that this compiles. Please correct me if there's a better way.
+			let mut shared = &*this;
+			while {
+				shared = shared.parent.as_ref()?;
+				generations += 1;
+				shared.value.borrow() != key
+			} {}
+
+			for _ in 0..generations {
+				this = this
+					.parent
+					.as_mut()
+					.expect("unreachable")
+					.pipe(Arc::make_mut)
+			}
+		}
+
 		Some(&mut this.value)
 	}
 }
