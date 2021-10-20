@@ -38,6 +38,7 @@ version-sync = "0.9.3"
 wasm-bindgen-test = "0.3.28"
 
 [dependencies]
+pin-project = "1.0.8"
 tap = "1.0.1"
 tiptoe = { features = ["sync"], version = "0.0.2" }
 

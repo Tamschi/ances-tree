@@ -16,10 +16,12 @@ pub mod readme {
 }
 
 /// A reference-counting inverse tree node.
+#[pin_project::pin_project]
 #[derive(Debug)]
 pub struct Node<T> {
 	pub parent: Option<NodeHandle<T>>,
 	pub value: T,
+	#[pin] // Required to keep `Node<T>: !Unpin`!
 	_pin: PhantomPinned,
 }
 
@@ -57,8 +59,15 @@ impl<T> Node<T> {
 		Pin::clone(unsafe { Arc::borrow_pin_from_inner_ref(&self) })
 	}
 
-	// The standard library doesn't provide mutability helpers on `Arc` that work (safely) with a pinned value.
-	// Mutability will be back, eventually.
+	#[must_use]
+	pub fn parent_mut<'a>(self: &'a mut Pin<&mut Self>) -> &'a mut Option<NodeHandle<T>> {
+		self.as_mut().project().parent
+	}
+
+	#[must_use]
+	pub fn value_mut<'a>(self: &'a mut Pin<&mut Self>) -> &'a mut T {
+		self.as_mut().project().value
+	}
 }
 
 unsafe impl<T> IntrusivelyCountable for Node<T> {
