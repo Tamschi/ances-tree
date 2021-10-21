@@ -8,7 +8,7 @@
 
 use std::{borrow::Borrow, pin::Pin};
 use tap::Pipe;
-use tiptoe::{Arc, IntrusivelyCountable, TipToe};
+use tiptoe::{Arc, IntrusivelyCountable, ManagedClone, TipToe};
 
 #[cfg(doctest)]
 pub mod readme {
@@ -77,5 +77,18 @@ unsafe impl<T> IntrusivelyCountable for Node<T> {
 	#[inline(always)]
 	fn ref_counter(&self) -> &Self::RefCounter {
 		&self.tip_toe
+	}
+}
+
+impl<T> ManagedClone for Node<T>
+where
+	T: Clone,
+{
+	unsafe fn managed_clone(&self) -> Self {
+		Self {
+			parent: Option::clone(&self.parent),
+			value: self.value.clone(),
+			tip_toe: self.tip_toe.clone(),
+		}
 	}
 }
