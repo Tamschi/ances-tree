@@ -6,7 +6,7 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::semicolon_if_nothing_returned)]
 
-use std::{borrow::Borrow, marker::PhantomPinned, pin::Pin};
+use std::{borrow::Borrow, pin::Pin};
 use tap::Pipe;
 use tiptoe::{Arc, IntrusivelyCountable, TipToe};
 
@@ -22,7 +22,7 @@ pub struct Node<T> {
 	pub parent: Option<NodeHandle<T>>,
 	pub value: T,
 	#[pin] // Required to keep `Node<T>: !Unpin`!
-	_pin: PhantomPinned,
+	tip_toe: TipToe,
 }
 
 pub type NodeHandle<T> = Pin<Arc<Node<T>>>;
@@ -33,7 +33,7 @@ impl<T> Node<T> {
 		Node {
 			parent,
 			value,
-			_pin: PhantomPinned,
+			tip_toe: TipToe::new(),
 		}
 		.pipe(Arc::pin)
 	}
@@ -73,7 +73,9 @@ impl<T> Node<T> {
 unsafe impl<T> IntrusivelyCountable for Node<T> {
 	type RefCounter = TipToe;
 
+	#[allow(clippy::inline_always)]
+	#[inline(always)]
 	fn ref_counter(&self) -> &Self::RefCounter {
-		todo!()
+		&self.tip_toe
 	}
 }
