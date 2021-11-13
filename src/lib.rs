@@ -6,8 +6,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::semicolon_if_nothing_returned)]
 
-use std::{borrow::Borrow, marker::PhantomPinned, pin::Pin, sync::Arc};
+use std::{borrow::Borrow, marker::PhantomPinned, ops::Deref, pin::Pin};
 use tap::Pipe;
+use triomphe::{Arc, ArcBorrow};
 
 #[cfg(doctest)]
 pub mod readme {
@@ -17,22 +18,12 @@ pub mod readme {
 /// A reference-counting inverse tree node.
 #[derive(Debug)]
 pub struct Node<T> {
-	pub parent: Option<Pin<Arc<Self>>>,
+	pub parent: Option<NodeHandle<T>>,
 	pub value: T,
 	_pin: PhantomPinned,
 }
 
 impl<T> Node<T> {
-	/// Creates a new [`Node`] instance with the given `parent` and `value`.
-	pub fn new(parent: Option<Pin<Arc<Self>>>, value: T) -> Pin<Arc<Self>> {
-		Self {
-			parent,
-			value,
-			_pin: PhantomPinned,
-		}
-		.pipe(Arc::pin)
-	}
-
 	/// Retrieves a reference to a [`Node`] with a value matching `key` iff available.
 	///
 	/// See also: <https://doc.rust-lang.org/stable/std/collections/hash_set/struct.HashSet.html#method.get>
@@ -51,4 +42,62 @@ impl<T> Node<T> {
 
 	// The standard library doesn't provide mutability helpers on `Arc` that work (safely) with a pinned value.
 	// Mutability will be back, eventually.
+}
+
+#[derive(Debug)]
+pub struct NodeBorrow<'a, T> {
+	arc_borrow: Pin<ArcBorrow<'a, Node<T>>>,
+}
+
+impl<T> Deref for NodeBorrow<'_, T> {
+	type Target = Node<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&*self.arc_borrow
+	}
+}
+
+#[derive(Debug)]
+pub struct NodeHandle<T> {
+	arc: Pin<Arc<Node<T>>>,
+}
+
+impl<T> NodeHandle<T> {
+	/// Creates a new [`Node`] instance with the given `parent` and `value`.
+	pub fn new(parent: Option<NodeHandle<T>>, value: T) -> Self {
+		Node {
+			parent,
+			value,
+			_pin: PhantomPinned,
+		}
+		.pipe(Arc::new)
+		.pipe(|arc| unsafe { Pin::new_unchecked(arc) })
+		.pipe(|arc| Self { arc })
+	}
+
+	#[must_use]
+	pub fn borrow(this: &Self) -> NodeBorrow<'_, T> {
+		unsafe { &*(&this.arc as *const Pin<Arc<Node<T>>>).cast::<Arc<Node<T>>>() }
+			.pipe(Arc::borrow_arc)
+			.pipe(|arc_borrow| unsafe { Pin::new_unchecked(arc_borrow) })
+			.pipe(|arc_borrow| NodeBorrow { arc_borrow })
+	}
+
+	#[must_use]
+	pub fn clone_handle(this: &NodeBorrow<T>) -> Self {
+		unsafe {
+			&*(&this.arc_borrow as *const Pin<ArcBorrow<Node<T>>>).cast::<ArcBorrow<Node<T>>>()
+		}
+		.pipe(ArcBorrow::clone_arc)
+		.pipe(|arc| unsafe { Pin::new_unchecked(arc) })
+		.pipe(|arc| Self { arc })
+	}
+}
+
+impl<T> Deref for NodeHandle<T> {
+	type Target = Node<T>;
+
+	fn deref(&self) -> &Self::Target {
+		&*self.arc
+	}
 }
