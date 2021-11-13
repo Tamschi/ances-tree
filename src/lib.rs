@@ -56,7 +56,10 @@ impl<T> Node<T> {
 
 	#[must_use]
 	pub fn clone_handle(&self) -> NodeHandle<T> {
-		Pin::clone(unsafe { Arc::borrow_pin_from_inner_ref(&self) })
+		Pin::clone(unsafe {
+			// SAFETY: It's impossible for a consumer to acquire a reference to a `Node` outside an `Arc`.
+			Arc::borrow_pin_from_inner_ref(&self)
+		})
 	}
 
 	#[must_use]
@@ -71,6 +74,10 @@ impl<T> Node<T> {
 }
 
 unsafe impl<T> IntrusivelyCountable for Node<T> {
+	// SAFETY:
+	// The returned reference-counter is a not otherwise decremented private per-instance counter and `Node` is `!Unpin`,
+	// which fulfills the semantic requirements for such a reference-counter even if `Pin<&mut Node<T>>` can be acquired.
+
 	type RefCounter = TipToe;
 
 	#[allow(clippy::inline_always)]
@@ -85,6 +92,9 @@ where
 	T: Clone,
 {
 	unsafe fn managed_clone(&self) -> Self {
+		// SAFETY:
+		// These are fully safe operations.
+		// Cloning `TipToe` returns a new instance with internal count zero, which is correct here.
 		Self {
 			parent: Option::clone(&self.parent),
 			value: self.value.clone(),
