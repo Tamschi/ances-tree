@@ -1,5 +1,4 @@
 use ances_tree::{Node, NodeHandle};
-use std::pin::Pin;
 use tiptoe::Arc;
 
 #[test]
@@ -11,7 +10,7 @@ fn test() {
 		let _: &mut Option<NodeHandle<i32>> = exclusive.parent_mut();
 	}
 
-	let second_handle = Pin::clone(&handle);
+	let second_handle = handle.clone_handle();
 	assert!(Arc::get_mut(&mut handle).is_none());
 	assert_eq!(second_handle.value, 1);
 }
